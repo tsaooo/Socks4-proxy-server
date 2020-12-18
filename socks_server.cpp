@@ -111,11 +111,19 @@ void socks_protocol(shared_ptr<tcp::socket> cli_socket)
 	u_char reply_[8];
 
 	std::size_t leng = cli_socket->read_some(boost::asio::buffer(request_));
+	if(leng == -1){
+		cout << "read error\n";
+		exit(1);
+	}
 	u_char vn = request_[0];
 	u_char cd = request_[1];
 	u_short dst_port = request_[2] << 8 | request_[3];
 	string dst_ip = std::to_string(request_[4]) + "." + std::to_string(request_[5]) + "." + std::to_string(request_[6]) + "." + std::to_string(request_[7]);
 	string usr_id = (char *)(request_ + 8);
+
+	cout << "usr_id: " << usr_id << endl;
+	cout << "usr_id length: " << usr_id.length() <<endl;
+
 	if (vn != 4 || cd != 1 || cd != 2)
 	{
 		cerr << "bad socks request";
@@ -227,6 +235,7 @@ private:
 			{
 				io_context.notify_fork(boost::asio::execution_context::fork_child);
 				socks_protocol(socket_);
+				exit(0);
 			}
 			else
 			{
