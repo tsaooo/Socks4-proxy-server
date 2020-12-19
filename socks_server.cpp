@@ -69,8 +69,12 @@ private:
 bool firewall(u_char request[])
 {
 	std::ifstream conf("socks_conf");
+	if(!conf.is_open()){
+		cerr << "socks_conf not exist" << endl;
+		return false;
+	}
 	string rule, mode, addr;
-	u_char addr_seg[4];
+	string addr_seg[4];
 
 	while (conf >> rule)
 	{
@@ -82,17 +86,18 @@ bool firewall(u_char request[])
 			pos = addr.find('.');
 			if (pos != string::npos)
 			{
-				addr_seg[i] = (u_char)std::stoul(addr.substr(0, pos));
+				cout << "hi" << endl;
+				addr_seg[i] = addr.substr(0, pos);
 				addr.erase(0, pos + 1);
 			}
 			else
-				addr_seg[i] = (u_char)std::stoul(addr.substr(0, pos));
+				addr_seg[i] = addr.substr(0);
 		}
-		if (mode == "c" && request[1] == 1 || mode == "b" && request[1] == 2)
+		if ((mode == "c" && request[1] == 1 )|| (mode == "b" && request[1] == 2))
 		{
 			bool same_addr = true;
 			for (int i = 0; i < 4; i++)
-				if (addr_seg[i] != '*' && (addr_seg[i] != request[i + 4]))
+				if (addr_seg[i] != "*" && ((u_char)std::stoul(addr_seg[i]) != request[i + 4]))
 				{
 					same_addr = false;
 					break;
@@ -108,13 +113,9 @@ void socks_protocol(shared_ptr<tcp::socket> cli_socket)
 {
 	tcp::endpoint ep;
 	u_char request_[max_length];
-	u_char reply_[8];
+	u_char reply_[8] = {0};
 
 	std::size_t leng = cli_socket->read_some(boost::asio::buffer(request_));
-	if(leng == -1){
-		cout << "read error\n";
-		exit(1);
-	}
 	u_char vn = request_[0];
 	u_char cd = request_[1];
 	u_short dst_port = request_[2] << 8 | request_[3];
@@ -124,10 +125,13 @@ void socks_protocol(shared_ptr<tcp::socket> cli_socket)
 	cout << "usr_id: " << usr_id << endl;
 	cout << "usr_id length: " << usr_id.length() <<endl;
 
-	if (vn != 4 || cd != 1 || cd != 2)
+	if (vn != 4)
 	{
-		cerr << "bad socks request";
+		cerr << "Bad socks4 request\n";
 		exit(0);
+	}
+	else if (cd != 1 && cd != 2){
+		cerr << "Bad socks4 request CD = " << cd << endl;
 	}
 	//socks4A
 	if (request_[4] == 0 && request_[5] == 0 && request_[6] == 0 && request_[7] != 0)
@@ -159,16 +163,10 @@ void socks_protocol(shared_ptr<tcp::socket> cli_socket)
 	cout << "<S_PORT>: " << cli_socket->remote_endpoint().port() << endl;
 	cout << "<D_IP>: " << dst_ip << endl;
 	cout << "<D_PORT>: " << dst_port << endl;
-	cout << "<Commmand>: " << cd << endl;
-	cout << "<Reply>: ";
+	cout << "<Commmand>: " << ((cd == 1) ? "Connect" : "Bind") << endl;
+	cout << "<Reply>: " << ((reply_[1] == REJECT) ? "Reject" : "Accept") << endl;
 	if (reply_[1] == REJECT)
-	{
-		cout << "Reject" << endl;
 		exit(0);
-	}
-	else
-		cout << "Accept" << endl;
-
 	//Check connect or bind operation
 	auto dst_socket = std::make_shared<tcp::socket>(io_context);
 	if (cd == 1)
@@ -191,7 +189,7 @@ void socks_protocol(shared_ptr<tcp::socket> cli_socket)
 	{
 		//bind
 		boost::system::error_code ec;
-		tcp::endpoint ep(tcp::v4(), 9000);
+		tcp::endpoint ep(tcp::v4(), INADDR_ANY);
 		tcp::acceptor acceptor_(io_context, ep);
 
 		reply_[2] = ep.port() / 256;
@@ -226,26 +224,25 @@ public:
 private:
 	void do_accept()
 	{
-		auto socket_ = std::make_shared<tcp::socket>(io_context);
 		while (true)
 		{
+			auto socket_ = std::make_shared<tcp::socket>(io_context);
 			acceptor_.accept(*socket_);
 			io_context.notify_fork(boost::asio::execution_context::fork_prepare);
 			if (fork() == 0)
 			{
 				io_context.notify_fork(boost::asio::execution_context::fork_child);
 				socks_protocol(socket_);
+				cout << "close connection\n";
 				exit(0);
 			}
 			else
 			{
 				io_context.notify_fork(boost::asio::execution_context::fork_parent);
-				acceptor_.accept(*socket_);
+				socket_->close();
 			}
 		}
 	}
-	// enum{ max_length = 1024};
-	// std::array<char, max_length> data_;
 	tcp::acceptor acceptor_;
 };
 

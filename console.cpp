@@ -88,12 +88,12 @@ private:
         request[3] = (u_char) std::stoul(dst_port_) % 256;
         request[4] = request[5] = request[6] = 0;
         request[7] = 1;
-        request[8] = NULL;
+        request[8] = 0;
         for(int i = 0; i<dst_host_.length(); i++)
             request[9+i] = dst_host_[i];
-        request[9 + dst_host_.length()] = NULL;
+        request[9 + dst_host_.length()] = 0;
         auto self(shared_from_this());
-        socket_->async_send(boost::asio::buffer(request, 9+dst_host_.length()),
+        socket_.async_send(boost::asio::buffer(request, 10 + dst_host_.length()),
                             [this, self](boost::system::error_code ec, std::size_t length)
                             {
                                 if(!ec){
@@ -104,7 +104,7 @@ private:
 
     void do_socks_reply(){
         auto self(shared_from_this());
-        socket_->async_read_some(boost::asio::buffer(data_, 8),
+        socket_.async_read_some(boost::asio::buffer(data_),
                                 [this, self](boost::system::error_code ec, std::size_t length)
                                 {
                                     if(!ec){
@@ -112,7 +112,7 @@ private:
                                             std::cerr << "Bad socks reply\n";
                                         else if(data_[1] == 91)
                                             std::cerr << "Socks request rejected\n";
-                                        else if(data_[1] = 90){
+                                        else if(data_[1] == 90){
                                             do_read();
                                         }
                                     }
