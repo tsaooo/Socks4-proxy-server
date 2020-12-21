@@ -124,7 +124,7 @@ void socks_protocol(shared_ptr<tcp::socket> cli_socket)
     u_char request_[max_length] = {0};
     u_char reply_[8] = {0};
 
-    std::size_t leng = cli_socket->read_some(boost::asio::buffer(request_));
+    cli_socket->read_some(boost::asio::buffer(request_));
     u_char vn = request_[0];
     u_char cd = request_[1];
     u_short dst_port = request_[2] << 8 | request_[3];
